@@ -1,7 +1,7 @@
 apiVersion: pxc.percona.com/v1
 kind: PerconaXtraDBCluster
 metadata:
-  name: cluster1
+  name: cluster2
   finalizers:
     - delete-pxc-pods-in-order
 #    - delete-ssl
@@ -15,20 +15,20 @@ spec:
 #    - iam.amazonaws.com/role
 #  ignoreLabels:
 #    - rack
-#  secretsName: cluster1-secrets
-#  vaultSecretName: keyring-secret-vault
-#  sslSecretName: cluster1-ssl
-#  sslInternalSecretName: cluster1-ssl-internal
-#  logCollectorSecretName: cluster1-log-collector-secrets
-#  initContainer:
-#    image: perconalab/percona-xtradb-cluster-operator:main
-#    resources:
-#      requests:
-#        memory: 100M
-#        cpu: 100m
-#      limits:
-#        memory: 200M
-#        cpu: 200m
+  secretsName: cluster2-secrets
+  vaultSecretName: keyring-secret-vault
+  sslSecretName: cluster2-ssl
+  sslInternalSecretName: cluster2-ssl-internal
+  logCollectorSecretName: cluster2-log-collector-secrets
+  initContainer:
+    image: docker.io/perconalab/percona-xtradb-cluster-operator:main
+    resources:
+      requests:
+        memory: 100M
+        cpu: 100m
+      limits:
+        memory: 200M
+        cpu: 200m
 #  enableCRValidationWebhook: true
 #  tls:
 #    SANs:
@@ -39,7 +39,7 @@ spec:
 #      name: special-selfsigned-issuer
 #      kind: ClusterIssuer
 #      group: cert-manager.io
-  allowUnsafeConfigurations: false
+  allowUnsafeConfigurations: true
 #  pause: false
   updateStrategy: SmartUpdate
   upgradeOptions:
@@ -48,7 +48,7 @@ spec:
     schedule: "0 4 * * *"
   pxc:
     size: 3
-    image: perconalab/percona-xtradb-cluster-operator:main-pxc8.0
+    image: docker.io/perconalab/percona-xtradb-cluster-operator:main-pxc8.0
     autoRecovery: true
 #    expose:
 #      enabled: true
@@ -82,6 +82,7 @@ spec:
 #    livenessDelaySec: 600
 #    configuration: |
 #      [mysqld]
+#      socket.ssl=YES   
 #      wsrep_debug=CLIENT
 #      wsrep_provider_options="gcache.size=1G; gcache.recover=yes"
 #      [sst]
@@ -176,8 +177,8 @@ spec:
 #        path: /data
 #        type: Directory
       persistentVolumeClaim:
-#        storageClassName: standard
-#        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: longhorn
+        accessModes: [ "ReadWriteOnce" ]
         resources:
           requests:
             storage: 6G
@@ -191,8 +192,8 @@ spec:
 #          command: [ "/bin/true" ]
   haproxy:
     enabled: true
-    size: 3
-    image: perconalab/percona-xtradb-cluster-operator:main-haproxy
+    size: 2
+    image: docker.io/perconalab/percona-xtradb-cluster-operator:main-haproxy
 #    imagePullPolicy: Always
 #    schedulerName: mycustom-scheduler
 #    readinessDelaySec: 15
@@ -529,7 +530,7 @@ spec:
 #     - 10.0.0.0/8
   logcollector:
     enabled: true
-    image: perconalab/percona-xtradb-cluster-operator:main-logcollector
+    image: docker.io/perconalab/percona-xtradb-cluster-operator:main-logcollector
 #    configuration: |
 #      [OUTPUT]
 #           Name  es
@@ -544,7 +545,7 @@ spec:
         cpu: 200m
   pmm:
     enabled: false
-    image: percona/pmm-client:2.41.1
+    image: docker.io/percona/pmm-client:2.41.1
     serverHost: monitoring-service
 #    serverUser: admin
 #    pxcParams: "--disable-tablestats-limit=2000"
@@ -557,14 +558,15 @@ spec:
         cpu: 300m
   backup:
 #    allowParallel: true
-    image: perconalab/percona-xtradb-cluster-operator:main-pxc8.0-backup
+    image: docker.io/perconalab/percona-xtradb-cluster-operator:main-pxc8.0-backup
 #    backoffLimit: 6
-#    serviceAccountName: percona-xtradb-cluster-operator
+    serviceAccountName: percona-xtradb-cluster-operator
+#    allowUnsafeConfigurations: true
 #    imagePullSecrets:
 #      - name: private-registry-credentials
     pitr:
       enabled: false
-      storageName: STORAGE-NAME-HERE
+      storageName: fs-pvc
       timeBetweenUploads: 60
       timeoutSeconds: 60
 #      resources:
@@ -574,69 +576,22 @@ spec:
 #        limits:
 #          memory: 1G
 #          cpu: 700m
-    storages:
+    storages: 
       s3-us-west:
         type: s3
         verifyTLS: true
-#        nodeSelector:
-#          storage: tape
-#          backupWorker: 'True'
-#        resources:
-#          requests:
-#            memory: 1G
-#            cpu: 600m
-#        topologySpreadConstraints:
-#        - labelSelector:
-#            matchLabels:
-#              app.kubernetes.io/name: percona-xtradb-cluster
-#          maxSkew: 1
-#          topologyKey: kubernetes.io/hostname
-#          whenUnsatisfiable: DoNotSchedule
-#        affinity:
-#          nodeAffinity:
-#            requiredDuringSchedulingIgnoredDuringExecution:
-#              nodeSelectorTerms:
-#              - matchExpressions:
-#                - key: backupWorker
-#                  operator: In
-#                  values:
-#                  - 'True'
-#        tolerations:
-#          - key: "backupWorker"
-#            operator: "Equal"
-#            value: "True"
-#            effect: "NoSchedule"
-#        annotations:
-#          testName: scheduled-backup
-#        labels:
-#          backupWorker: 'True'
-#        schedulerName: 'default-scheduler'
-#        priorityClassName: 'high-priority'
-#        containerSecurityContext:
-#          privileged: true
-#        podSecurityContext:
-#          fsGroup: 1001
-#          supplementalGroups: [1001, 1002, 1003]
-#        containerOptions:
-#          env:
-#          - name: VERIFY_TLS
-#            value: "false"
-#          args:
-#            xtrabackup:
-#            - "--someflag=abc"
-#            xbcloud:
-#            - "--someflag=abc"
-#            xbstream:
-#            - "--someflag=abc"
         s3:
-          bucket: S3-BACKUP-BUCKET-NAME-HERE
+          bucket: backup-percona
           credentialsSecret: my-cluster-name-backup-s3
-          region: us-west-2
-      azure-blob:
-        type: azure
-        azure:
-          credentialsSecret: azure-secret
-          container: test
+          region: us-east-2
+#          bucket: backup-percona
+#          credentialsSecret: my-cluster-name-backup-s3
+#          region: us-east-2
+#      azure-blob:
+#        type: azure
+#        azure:
+#          credentialsSecret: azure-secret
+#          container: test
 #          endpointUrl: https://accountName.blob.core.windows.net
 #          storageClass: Hot
       fs-pvc:
@@ -682,17 +637,18 @@ spec:
 #          supplementalGroups: [1001, 1002, 1003]
         volume:
           persistentVolumeClaim:
-#            storageClassName: standard
+#            claimName: fs-pvc
+            storageClassName: longhorn
             accessModes: [ "ReadWriteOnce" ]
             resources:
               requests:
-                storage: 6G
+                storage: 1G
     schedule:
-#      - name: "sat-night-backup"
-#        schedule: "0 0 * * 6"
-#        keep: 3
-#        storageName: s3-us-west
       - name: "daily-backup"
         schedule: "0 0 * * *"
-        keep: 5
+        keep: 3
+        storageName: s3-us-west
+      - name: "hourly-backup"
+        schedule: "0 * * * *"
+        keep: 2
         storageName: fs-pvc
